@@ -1,0 +1,12 @@
+{
+  "name": "camp-notes",
+  "version": "0.1.0",
+  "description": "A focused, local-first web notes app. Notes stay in your browser.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/notes.test.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/serve.mjs"
+  },
+  "license": "MIT"
+}
