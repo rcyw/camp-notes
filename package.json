@@ -1,6 +1,6 @@
 {
   "name": "camp-notes",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A focused, local-first web notes app. Notes stay in your browser.",
   "type": "module",
   "scripts": {

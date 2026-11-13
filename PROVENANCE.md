@@ -28,3 +28,35 @@ Validation before publication:
 The GitHub Pages workflow, this provenance record and release packaging are
 operator additions after export. GitHub Actions validates and deploys the Git
 commit independently. The Notes app itself uses no model or remote service.
+
+## v0.1.1 autosave patch
+
+The implementation was produced through a real Camp Work item on Camp source
+`4e29f45fd69e752b54b3ec4947c3cb3a90fc9010`. Notes Developer implemented the
+candidate, handed it to the read-only Notes Reviewer, and addressed their
+returned findings. The Runner checked and published exact source snapshot
+`6e46d42a2ef99907b91133bfdfcbe1b73566fd9d`; Work then completed automatically.
+The operator exported that immutable snapshot through Camp's archive API without
+editing the application code, preserving this repository's GitHub workflow and
+existing provenance.
+
+This was not an intervention-free run: it used 66 real provider requests and
+7 execution turns. Four operator recoveries adjusted the output limit or finite
+allowances after execution stopped, always resuming retained files. The original
+24-request ceiling was explicitly increased to 48, then 60, then 68; the final
+turn ceiling was 7. No unknown model request was replayed or budget reset.
+
+Independent operator checks after publication:
+
+- The original immediate-reload data loss reproduced against unchanged v0.1.0.
+- All 23 Node tests and the static build passed on the exported candidate.
+- 24 actual-browser cases passed across Chromium, Firefox, WebKit and a Chromium
+  touch viewport: immediate real reload, empty-text reload, synchronous pagehide
+  and hidden-visibility flush, corrupt-payload preservation, and a denied initial
+  storage read that performed no notes writes. Pagehide/visibility were also
+  dispatched explicitly to inspect their synchronous behavior; these are not
+  claims about an operating system killing a browser without lifecycle events.
+
+The patch preserves the existing visual layout, storage schema and dependencies.
+External GitHub publication and Pages deployment are operator actions, separate
+from the Agents' implementation and the Runner's publication inside Camp.
