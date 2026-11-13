@@ -11,6 +11,9 @@ and is prepared for hosting via GitHub Pages at
 
 - **Local-first**: notes are autosaved to `localStorage` in your browser. No
   account, tracking, remote services, paid API, external fonts, or CDN.
+- **Lossless autosave**: edits are debounced for 400ms, and any pending edit is
+  flushed synchronously on `pagehide` and when the tab becomes hidden, so a fast
+  reload or tab switch never loses the latest keystroke.
 - **Markdown editor** with a safe preview: headings, lists, emphasis, links,
   and code. User content is escaped — no raw HTML execution or unsafe URL
   schemes.
@@ -62,6 +65,8 @@ host. Asset paths also resolve under `/camp-notes/`.
   deleting.
 - **Storage errors**: if saving fails, a status message in the editor toolbar
   will tell you. Export your notes immediately to avoid losing changes.
+  If the saved payload cannot be read at startup, changes are not overwritten
+  — the app leaves the unknown data untouched until reading succeeds again.
 - **Corrupt saved data**: if the app cannot read previously saved data, it
   leaves the invalid payload untouched and offers to download the raw JSON or
   reset to a fresh state — it never silently overwrites your data.
@@ -72,6 +77,7 @@ host. Asset paths also resolve under `/camp-notes/`.
 index.html          app shell
 styles.css          styling
 src/app.mjs         UI wiring & persistence
+src/autosave.mjs    debounced autosave + synchronous lifecycle flush
 src/store.mjs       data model (CRUD, search, import/export)
 src/markdown.mjs    safe Markdown renderer
 scripts/build.mjs   build script

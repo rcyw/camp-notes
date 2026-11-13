@@ -16,6 +16,7 @@ import {
   emptyTrash,
 } from "./store.mjs";
 import { renderMarkdown } from "./markdown.mjs";
+import { createAutosave } from "./autosave.mjs";
 
 const STORAGE_KEY = "camp-notes.v1";
 
@@ -26,7 +27,6 @@ const state = {
   query: "",
   searchOpen: false,
   mode: "edit",
-  saveTimer: null,
   corrupt: false,
   corruptRaw: "",
 };
@@ -141,19 +141,13 @@ function load() {
   }
 }
 
-function persist() {
-  // Never overwrite an unreadable saved payload — even after the recovery
-  // dialog is dismissed — until the user explicitly resets.
-  if (state.corrupt) {
-    savedStatus.textContent = "Recovery needed — changes are not being saved";
-    savedStatus.setAttribute("role", "alert");
-    return;
-  }
-  if (readFailed) {
-    savedStatus.textContent = "Storage read failed — changes are not being saved";
-    savedStatus.setAttribute("role", "alert");
-    return;
-  }
+/**
+ * Raw localStorage write + status. Guarding is handled by the autosave
+ * instance's `isBlocked` predicate so every write path (debounced timer,
+ * lifecycle flush, and direct writes) enforces the never-overwrite rule in one
+ * place.
+ */
+function persistNow() {
   const payload = { app: "camp-notes", version: SCHEMA_VERSION, notes: state.notes };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -173,10 +167,45 @@ function persist() {
   }
 }
 
+/**
+ * Never overwrite an unreadable saved payload — even after the recovery dialog
+ * is dismissed — until the user explicitly resets. Reports the blocked state to
+ * the user via the status label and returns true so the autosave skips the write.
+ */
+function saveBlocked() {
+  if (state.corrupt) {
+    savedStatus.textContent = "Recovery needed — changes are not being saved";
+    savedStatus.setAttribute("role", "alert");
+    return true;
+  }
+  if (readFailed) {
+    savedStatus.textContent = "Storage read failed — changes are not being saved";
+    savedStatus.setAttribute("role", "alert");
+    return true;
+  }
+  return false;
+}
+
+const autosave = createAutosave({
+  write: persistNow,
+  isBlocked: saveBlocked,
+  onStatus: (status) => {
+    if (status === "saving") savedStatus.textContent = "Saving…";
+  },
+});
+
 function scheduleSave() {
-  savedStatus.textContent = "Saving…";
-  clearTimeout(state.saveTimer);
-  state.saveTimer = setTimeout(persist, 400);
+  autosave.schedule();
+}
+
+/**
+ * Synchronously flush any pending (debounced) edits to storage. Called on
+ * `pagehide` and `visibilitychange`→hidden so a fast reload/tab-switch never
+ * loses the latest keystroke. Pending text changes already live in
+ * `state.notes`, and the blocked-write guard still applies.
+ */
+function flushPendingSave() {
+  autosave.flush();
 }
 
 // ---------------------------------------------------------------- helpers
@@ -204,8 +233,11 @@ function selectNote(id, { focusTitle = false } = {}) {
   state.selectedId = id;
   renderList();
   renderEditor();
-  // Persist the selection so a reload restores the same open note.
-  if (storageAvailable) {
+  // Persist the selection so a reload restores the same open note. This writes
+  // to a separate key (never the notes payload), but it still respects the
+  // never-overwrite guard so that a corrupt/unreadable payload is left untouched
+  // on every write path. When blocked, saveBlocked() also surfaces the status.
+  if (storageAvailable && !saveBlocked()) {
     try {
       localStorage.setItem("camp-notes.selection", id ?? "");
     } catch {
@@ -478,7 +510,7 @@ function toggleArchive() {
     state.view = "notes";
     renderAll();
     renderEditor();
-    persist();
+    autosave.flush();
     return;
   }
   updateSelected({ archived: !note.archived });
@@ -652,8 +684,8 @@ importFile.addEventListener("change", () => {
 
 titleInput.addEventListener("input", () => updateSelected({ title: titleInput.value }));
 bodyInput.addEventListener("input", () => updateSelected({ body: bodyInput.value }));
-titleInput.addEventListener("blur", persist);
-bodyInput.addEventListener("blur", persist);
+titleInput.addEventListener("blur", () => autosave.flush());
+bodyInput.addEventListener("blur", () => autosave.flush());
 
 document.querySelectorAll(".view-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -663,7 +695,7 @@ document.querySelectorAll(".view-tab").forEach((tab) => {
     if (first) state.selectedId = first.id;
     renderAll();
     renderEditor();
-    persist();
+    autosave.flush();
   });
 });
 
@@ -737,6 +769,17 @@ document.addEventListener("keydown", (e) => {
 // Close mobile sidebar when a note is selected.
 noteList.addEventListener("click", () => {
   if (isMobile()) setSidebarOpen(false);
+});
+
+// ---------------------------------------------------------------- lifecycle flush
+// Flush pending debounced edits synchronously before the page is unloaded or
+// hidden so a fast reload/tab-switch never loses the latest keystroke. Using
+// pagehide (covers reload and navigation) plus the visibilitychange→hidden
+// path (covers bfcache-free backgrounding) that are reliable for sync writes
+// to localStorage.
+window.addEventListener("pagehide", flushPendingSave);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushPendingSave();
 });
 
 // ---------------------------------------------------------------- boot

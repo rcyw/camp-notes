@@ -15,6 +15,7 @@ import {
 } from "../src/store.mjs";
 
 import { escapeHtml, renderMarkdown } from "../src/markdown.mjs";
+import { createAutosave } from "../src/autosave.mjs";
 
 test("createNote assigns unique ids and defaults", () => {
   const a = createNote();
@@ -202,4 +203,80 @@ test("renderMarkdown fenced code blocks", () => {
   const out = renderMarkdown("```js\nconst a = 1 < 2;\n```");
   assert.ok(out.includes("<pre><code>"));
   assert.ok(out.includes("&lt; 2"));
+});
+
+// ---------------------------------------------------------------- autosave
+
+test("autosave flush synchronously writes a pending debounced edit", () => {
+  let writes = 0;
+  const autosave = createAutosave({
+    write: () => { writes += 1; },
+    delay: 400,
+  });
+  autosave.schedule();
+  // The debounce timer has not fired yet, so nothing has been written…
+  assert.equal(writes, 0);
+  // …but a lifecycle flush (pagehide/visibilitychange→hidden) writes it now.
+  autosave.flush();
+  assert.equal(writes, 1);
+  assert.equal(autosave.isPending(), false);
+});
+
+test("autosave flush writes the latest value, not a stale snapshot", () => {
+  // The actual reported defect: type a change and reload before the debounce.
+  // `current` is the mutable note state; `schedule()` happens on the first
+  // keystroke, then the value keeps changing right up until the pagehide flush.
+  // `write` must capture the *latest* value, not whatever existed at schedule().
+  let current = { body: "first draft" };
+  let written = null;
+  const autosave = createAutosave({
+    write: () => { written = JSON.parse(JSON.stringify(current)); },
+    delay: 400,
+  });
+  autosave.schedule();
+  assert.equal(written, null); // debounce has not fired yet
+  // Further edits mutate the same object the writer will serialize.
+  current.body = "latest edit before reload";
+  autosave.flush();
+  assert.equal(written.body, "latest edit before reload");
+});
+
+test("autosave flush with nothing pending still does not lose a write", () => {
+  let writes = 0;
+  const autosave = createAutosave({ write: () => { writes += 1; } });
+  autosave.flush();
+  assert.equal(writes, 1);
+});
+
+test("autosave never writes when the storage guard is blocked", () => {
+  let writes = 0;
+  const autosave = createAutosave({
+    write: () => { writes += 1; },
+    isBlocked: () => true, // corrupt payload / failed initial read
+  });
+  autosave.schedule();
+  autosave.flush();
+  assert.equal(writes, 0);
+});
+
+test("autosave writes once guard clears, and schedule coalesces rapid edits", async () => {
+  let writes = 0;
+  let blocked = true;
+  const autosave = createAutosave({
+    write: () => { writes += 1; },
+    isBlocked: () => blocked,
+    delay: 5,
+  });
+  // Blocked flush must not write.
+  autosave.flush();
+  assert.equal(writes, 0);
+
+  // After recovery clears the guard, a normal schedule debounces and writes.
+  blocked = false;
+  autosave.schedule();
+  autosave.schedule();
+  autosave.schedule();
+  assert.equal(writes, 0);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(writes, 1);
 });
