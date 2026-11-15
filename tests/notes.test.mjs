@@ -16,6 +16,7 @@ import {
 
 import { escapeHtml, renderMarkdown } from "../src/markdown.mjs";
 import { createAutosave } from "../src/autosave.mjs";
+import { filenameFromTitle, noteMarkdownExport } from "../src/export.mjs";
 
 test("createNote assigns unique ids and defaults", () => {
   const a = createNote();
@@ -203,6 +204,52 @@ test("renderMarkdown fenced code blocks", () => {
   const out = renderMarkdown("```js\nconst a = 1 < 2;\n```");
   assert.ok(out.includes("<pre><code>"));
   assert.ok(out.includes("&lt; 2"));
+});
+
+// ---------------------------------------------------------------- markdown export
+
+test("filenameFromTitle derives a safe .md filename from the title", () => {
+  assert.equal(filenameFromTitle("Quarterly review"), "Quarterly review.md");
+  assert.equal(filenameFromTitle("Café ☕"), "Café ☕.md");
+  assert.equal(filenameFromTitle('a/b\\c:d*e?f"g<h>i|j'), "a-b-c-d-e-f-g-h-i-j.md");
+  assert.equal(filenameFromTitle("   "), "untitled.md");
+  assert.equal(filenameFromTitle(""), "untitled.md");
+  assert.equal(filenameFromTitle("..."), "untitled.md");
+  assert.equal(filenameFromTitle("report."), "report.md");
+  assert.equal(filenameFromTitle("line\nbreak"), "line break.md");
+});
+
+test("filenameFromTitle limits long titles without splitting surrogates", () => {
+  const long = "🎉".repeat(120);
+  const name = filenameFromTitle(long);
+  assert.ok(name.endsWith(".md"));
+  const base = name.slice(0, -3);
+  assert.equal(Array.from(base).length, 60);
+  assert.equal(base, "🎉".repeat(60));
+});
+
+test("filenameFromTitle avoids Windows reserved device names", () => {
+  for (const name of ["CON", "con", "PRN", "AUX", "NUL", "COM1", "com3", "LPT9"]) {
+    assert.equal(filenameFromTitle(name), `_${name}.md`);
+  }
+  assert.equal(filenameFromTitle("CON.report"), "_CON.report.md");
+  assert.equal(filenameFromTitle("My notes"), "My notes.md");
+});
+
+test("noteMarkdownExport returns the exact authored body as UTF-8 text", () => {
+  const body = "first line\n\n第二行  ☕\n\tindented\n\n  trailing spaces  \n";
+  const note = createNote({ title: "Export me", body });
+  const result = noteMarkdownExport(note);
+  assert.equal(result.text, note.body);
+  assert.equal(result.filename, "Export me.md");
+  assert.ok(Buffer.from(result.text, "utf8").equals(Buffer.from(note.body, "utf8")));
+});
+
+test("noteMarkdownExport falls back for an empty title", () => {
+  const note = createNote({ title: "", body: "body" });
+  const result = noteMarkdownExport(note);
+  assert.equal(result.filename, "untitled.md");
+  assert.equal(result.text, "body");
 });
 
 // ---------------------------------------------------------------- autosave

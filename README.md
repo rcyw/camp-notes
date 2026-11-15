@@ -22,6 +22,8 @@ and is prepared for hosting via GitHub Pages at
 - **Backup**: JSON export and validated import (merge or replace with a
   preview of consequences). Malformed imports are rejected without touching
   your existing notes.
+- **Download Markdown**: export the selected note's authored body as a UTF-8
+  Markdown file with a safe, title-based filename.
 - **Keyboard & mobile friendly**: visible focus, responsive sidebar, and
   editor/back behavior on narrow screens.
 
@@ -30,7 +32,8 @@ and is prepared for hosting via GitHub Pages at
 - Notes are stored **only in this browser's localStorage**. Clearing site data
   or using a different browser/device will not carry your notes over.
 - **Local saving is not a backup.** Use **Export** regularly to download a
-  JSON file you can keep and re-import later.
+  JSON file you can keep and re-import later, or **Download Markdown** to save
+  a single note's body as a `.md` file.
 - There is **no cross-device sync and no encryption**.
 
 ## Getting started
@@ -80,6 +83,7 @@ src/app.mjs         UI wiring & persistence
 src/autosave.mjs    debounced autosave + synchronous lifecycle flush
 src/store.mjs       data model (CRUD, search, import/export)
 src/markdown.mjs    safe Markdown renderer
+src/export.mjs      Markdown download helpers (safe filename, exact body)
 scripts/build.mjs   build script
 scripts/serve.mjs   local dev server
 tests/notes.test.mjs  test suite

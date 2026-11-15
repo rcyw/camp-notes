@@ -17,6 +17,7 @@ import {
 } from "./store.mjs";
 import { renderMarkdown } from "./markdown.mjs";
 import { createAutosave } from "./autosave.mjs";
+import { noteMarkdownExport } from "./export.mjs";
 
 const STORAGE_KEY = "camp-notes.v1";
 
@@ -51,6 +52,7 @@ const savedStatus = $("saved-status");
 const pinBtn = $("pin-btn");
 const archiveBtn = $("archive-btn");
 const trashBtn = $("trash-btn");
+const downloadBtn = $("download-btn");
 const exportBtn = $("export-btn");
 const importBtn = $("import-btn");
 const importFile = $("import-file");
@@ -549,6 +551,22 @@ function doExport() {
   URL.revokeObjectURL(url);
 }
 
+/** Download the selected note's authored body as a UTF-8 Markdown file. */
+function downloadSelectedMarkdown() {
+  const note = noteById(state.selectedId);
+  if (!note) return;
+  const { filename, text, mime } = noteMarkdownExport(note);
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function handleImportFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
@@ -677,6 +695,7 @@ trashBtn.addEventListener("click", () => {
   else trashSelected();
 });
 exportBtn.addEventListener("click", doExport);
+downloadBtn.addEventListener("click", downloadSelectedMarkdown);
 importBtn.addEventListener("click", () => importFile.click());
 importFile.addEventListener("change", () => {
   if (importFile.files && importFile.files[0]) handleImportFile(importFile.files[0]);
